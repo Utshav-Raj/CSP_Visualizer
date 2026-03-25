@@ -1,0 +1,1854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSP Visualizer – AI Constraint Satisfaction Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=JetBrains+Mono:wght@300;400;500&family=Space+Grotesk:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg-deep: #020408;
+    --bg-panel: rgba(8, 16, 28, 0.85);
+    --bg-card: rgba(12, 24, 44, 0.9);
+    --border: rgba(0, 200, 255, 0.15);
+    --border-bright: rgba(0, 200, 255, 0.5);
+    --accent-cyan: #00c8ff;
+    --accent-teal: #00ffcc;
+    --accent-purple: #a855f7;
+    --accent-orange: #ff6b35;
+    --accent-gold: #ffd700;
+    --text-primary: #e2f0ff;
+    --text-muted: #5a7a9a;
+    --text-dim: #2a4a6a;
+    --red: #ff4466;
+    --green: #00e87a;
+    --blue: #3399ff;
+    --conflict: #ff2244;
+    --success: #00ff88;
+    --trying: #ffaa00;
+    --glow-cyan: 0 0 20px rgba(0, 200, 255, 0.4);
+    --glow-teal: 0 0 20px rgba(0, 255, 204, 0.4);
+    --glow-red: 0 0 20px rgba(255, 68, 102, 0.6);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Space Grotesk', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* Animated background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 20%, rgba(0, 200, 255, 0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(168, 85, 247, 0.04) 0%, transparent 60%),
+      radial-gradient(ellipse 40% 60% at 60% 30%, rgba(0, 255, 204, 0.02) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Grid overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,200,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,200,255,0.03) 1px, transparent 1px);
+    background-size: 50px 50px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ===== LAYOUT ===== */
+  .app-layout {
+    display: flex;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar {
+    width: 260px;
+    min-height: 100vh;
+    background: rgba(4, 10, 20, 0.95);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    backdrop-filter: blur(20px);
+  }
+
+  .sidebar-logo {
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent-cyan);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    opacity: 0.7;
+  }
+
+  .logo-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.3;
+    letter-spacing: 1px;
+  }
+
+  .logo-title span {
+    color: var(--accent-cyan);
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    letter-spacing: 2px;
+    margin-top: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    opacity: 0.8;
+  }
+
+  .sidebar-nav {
+    padding: 16px 12px;
+    flex: 1;
+  }
+
+  .nav-section-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    padding: 0 8px;
+    margin-bottom: 8px;
+    margin-top: 16px;
+  }
+
+  .nav-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    text-align: left;
+    margin-bottom: 4px;
+  }
+
+  .nav-btn:hover {
+    background: rgba(0, 200, 255, 0.07);
+    border-color: var(--border);
+    color: var(--text-primary);
+  }
+
+  .nav-btn.active {
+    background: rgba(0, 200, 255, 0.12);
+    border-color: var(--border-bright);
+    color: var(--accent-cyan);
+    box-shadow: inset 0 0 20px rgba(0, 200, 255, 0.05), var(--glow-cyan);
+  }
+
+  .nav-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .nav-label { flex: 1; }
+
+  .nav-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(0, 200, 255, 0.1);
+    color: var(--accent-cyan);
+    letter-spacing: 1px;
+  }
+
+  /* Controls section */
+  .sidebar-controls {
+    padding: 16px 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .ctrl-group {
+    margin-bottom: 14px;
+  }
+
+  .ctrl-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .ctrl-value {
+    color: var(--accent-cyan);
+    font-size: 11px;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    -webkit-appearance: none;
+    height: 4px;
+    background: rgba(0, 200, 255, 0.1);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    box-shadow: 0 0 8px var(--accent-cyan);
+    cursor: pointer;
+  }
+
+  .btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    border: 1px solid;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+    text-align: center;
+  }
+
+  .btn-primary {
+    background: rgba(0, 200, 255, 0.15);
+    border-color: var(--accent-cyan);
+    color: var(--accent-cyan);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: rgba(0, 200, 255, 0.3);
+    box-shadow: var(--glow-cyan);
+  }
+
+  .btn-success {
+    background: rgba(0, 255, 204, 0.1);
+    border-color: var(--accent-teal);
+    color: var(--accent-teal);
+  }
+
+  .btn-success:hover:not(:disabled) {
+    background: rgba(0, 255, 204, 0.25);
+    box-shadow: var(--glow-teal);
+  }
+
+  .btn-danger {
+    background: rgba(255, 68, 102, 0.1);
+    border-color: var(--red);
+    color: var(--red);
+  }
+
+  .btn-danger:hover:not(:disabled) {
+    background: rgba(255, 68, 102, 0.25);
+    box-shadow: var(--glow-red);
+  }
+
+  .btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  /* Stats strip in sidebar */
+  .stat-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: rgba(0,200,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 12px;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .stat-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .stat-val {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+  }
+
+  /* ===== MAIN CONTENT ===== */
+  .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Top bar */
+  .topbar {
+    height: 56px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 28px;
+    gap: 20px;
+    background: rgba(4, 10, 20, 0.6);
+    backdrop-filter: blur(10px);
+  }
+
+  .topbar-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--text-primary);
+    text-transform: uppercase;
+  }
+
+  .topbar-sep { flex: 1; }
+
+  .status-chip {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    background: rgba(0,0,0,0.3);
+    transition: all 0.3s ease;
+  }
+
+  .status-chip.running {
+    border-color: var(--trying);
+    color: var(--trying);
+    background: rgba(255, 170, 0, 0.08);
+  }
+
+  .status-chip.solved {
+    border-color: var(--success);
+    color: var(--success);
+    background: rgba(0, 255, 136, 0.08);
+  }
+
+  .status-chip.conflict {
+    border-color: var(--conflict);
+    color: var(--conflict);
+    background: rgba(255, 34, 68, 0.08);
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  .status-chip.running .status-dot { animation: pulse 0.8s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  /* ===== PROBLEM PANELS ===== */
+  .problem-panel {
+    display: none;
+    flex: 1;
+    padding: 24px 28px;
+    overflow-y: auto;
+    gap: 20px;
+  }
+
+  .problem-panel.active {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Info bar */
+  .info-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+  }
+
+  .info-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    backdrop-filter: blur(10px);
+    transition: border-color 0.3s ease;
+  }
+
+  .info-card:hover { border-color: rgba(0,200,255,0.3); }
+
+  .info-card-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .info-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid;
+    letter-spacing: 0.5px;
+  }
+
+  .tag-var {
+    border-color: rgba(0, 200, 255, 0.3);
+    color: var(--accent-cyan);
+    background: rgba(0, 200, 255, 0.06);
+  }
+
+  .tag-domain-r { border-color: rgba(255,68,102,0.4); color: #ff6680; background: rgba(255,68,102,0.08); }
+  .tag-domain-g { border-color: rgba(0,232,122,0.4); color: #00e87a; background: rgba(0,232,122,0.08); }
+  .tag-domain-b { border-color: rgba(51,153,255,0.4); color: #66aaff; background: rgba(51,153,255,0.08); }
+
+  .constraint-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .constraint-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .constraint-item::before {
+    content: '≠';
+    color: var(--accent-orange);
+    font-size: 12px;
+  }
+
+  /* Visualization areas */
+  .viz-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    flex: 1;
+  }
+
+  .viz-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .viz-card-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .viz-card-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    color: var(--text-primary);
+    text-transform: uppercase;
+  }
+
+  .viz-card-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+  }
+
+  /* ===== AUSTRALIA MAP ===== */
+  .australia-map {
+    position: relative;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .map-svg-container {
+    width: 100%;
+    aspect-ratio: 1.3;
+    position: relative;
+  }
+
+  #australia-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .region {
+    cursor: pointer;
+    transition: filter 0.3s ease;
+  }
+
+  .region polygon, .region path, .region rect, .region ellipse {
+    transition: fill 0.4s ease, stroke 0.3s ease, filter 0.3s ease;
+    stroke: rgba(0,200,255,0.3);
+    stroke-width: 1.5;
+  }
+
+  .region.trying polygon, .region.trying path, .region.trying rect, .region.trying ellipse {
+    filter: drop-shadow(0 0 12px var(--trying)) brightness(1.2);
+    stroke: var(--trying) !important;
+    stroke-width: 2.5;
+    animation: regionPulse 0.5s ease infinite alternate;
+  }
+
+  .region.conflict polygon, .region.conflict path, .region.conflict rect, .region.conflict ellipse {
+    filter: drop-shadow(0 0 14px var(--conflict)) brightness(1.1);
+    stroke: var(--conflict) !important;
+    stroke-width: 3;
+  }
+
+  .region.assigned polygon, .region.assigned path, .region.assigned rect, .region.assigned ellipse {
+    filter: drop-shadow(0 0 8px rgba(0,255,136,0.4));
+    stroke: rgba(0,255,136,0.5) !important;
+    stroke-width: 2;
+  }
+
+  @keyframes regionPulse {
+    from { stroke-width: 2.5; }
+    to { stroke-width: 1.5; }
+  }
+
+  .region-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    fill: white;
+    text-anchor: middle;
+    pointer-events: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.9));
+  }
+
+  /* ===== N-QUEENS BOARD ===== */
+  #chess-board {
+    display: grid;
+    gap: 2px;
+    padding: 10px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+  }
+
+  .chess-cell {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    position: relative;
+    transition: background 0.15s ease, box-shadow 0.2s ease;
+    cursor: default;
+  }
+
+  .chess-cell.light { background: rgba(40, 70, 110, 0.6); }
+  .chess-cell.dark { background: rgba(15, 35, 65, 0.8); }
+
+  .chess-cell.trying {
+    background: rgba(255, 170, 0, 0.25) !important;
+    box-shadow: inset 0 0 14px rgba(255, 170, 0, 0.3), 0 0 10px rgba(255,170,0,0.2);
+  }
+
+  .chess-cell.placed {
+    background: rgba(0, 255, 136, 0.15) !important;
+    box-shadow: inset 0 0 14px rgba(0, 255, 136, 0.2), 0 0 12px rgba(0,255,136,0.15);
+  }
+
+  .chess-cell.conflict {
+    background: rgba(255, 36, 68, 0.25) !important;
+    box-shadow: inset 0 0 14px rgba(255,36,68,0.4), 0 0 10px rgba(255,36,68,0.2);
+    animation: conflictFlash 0.3s ease;
+  }
+
+  .chess-cell.threatened {
+    background: rgba(255, 107, 53, 0.12) !important;
+  }
+
+  @keyframes conflictFlash {
+    0% { background: rgba(255,36,68,0.6) !important; }
+    100% { background: rgba(255,36,68,0.25) !important; }
+  }
+
+  .queen-icon {
+    font-size: 28px;
+    transition: all 0.25s ease;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.7));
+    display: block;
+  }
+
+  .queen-icon.placed { filter: drop-shadow(0 0 10px rgba(0,255,136,0.8)) drop-shadow(0 2px 4px rgba(0,0,0,0.7)); }
+  .queen-icon.trying { filter: drop-shadow(0 0 10px rgba(255,170,0,0.8)) drop-shadow(0 2px 4px rgba(0,0,0,0.7)); animation: queenBounce 0.4s ease; }
+  .queen-icon.conflict { filter: drop-shadow(0 0 10px rgba(255,36,68,0.9)) drop-shadow(0 2px 4px rgba(0,0,0,0.7)); }
+
+  @keyframes queenBounce {
+    0% { transform: scale(0.5) translateY(-8px); opacity: 0; }
+    60% { transform: scale(1.15) translateY(2px); opacity: 1; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  /* ===== LOG PANEL ===== */
+  .log-panel {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .log-panel-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #step-log {
+    height: 220px;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  #step-log::-webkit-scrollbar { width: 4px; }
+  #step-log::-webkit-scrollbar-track { background: transparent; }
+  #step-log::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.2); border-radius: 2px; }
+
+  .log-entry {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border-left: 2px solid transparent;
+    animation: logFadeIn 0.25s ease;
+    line-height: 1.4;
+  }
+
+  @keyframes logFadeIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-entry.try {
+    color: #ffcc66;
+    border-left-color: var(--trying);
+    background: rgba(255,170,0,0.05);
+  }
+
+  .log-entry.assign {
+    color: #66ffaa;
+    border-left-color: var(--success);
+    background: rgba(0,255,136,0.05);
+  }
+
+  .log-entry.backtrack {
+    color: #ff7799;
+    border-left-color: var(--conflict);
+    background: rgba(255,36,68,0.05);
+  }
+
+  .log-entry.info {
+    color: var(--text-muted);
+    border-left-color: var(--text-dim);
+  }
+
+  .log-entry.solved {
+    color: var(--accent-teal);
+    border-left-color: var(--accent-teal);
+    background: rgba(0,255,204,0.06);
+    font-weight: 600;
+  }
+
+  /* ===== ASSIGNMENT TABLE ===== */
+  .assignment-grid {
+    display: grid;
+    gap: 8px;
+  }
+
+  .assignment-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+    transition: all 0.3s ease;
+  }
+
+  .assignment-row.assigned {
+    border-color: rgba(0,255,136,0.3);
+    background: rgba(0,255,136,0.05);
+  }
+
+  .assignment-row.trying {
+    border-color: rgba(255,170,0,0.5);
+    background: rgba(255,170,0,0.07);
+    animation: tryPulse 0.6s ease infinite alternate;
+  }
+
+  @keyframes tryPulse {
+    from { border-color: rgba(255,170,0,0.5); }
+    to { border-color: rgba(255,170,0,0.2); }
+  }
+
+  .assignment-var {
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    width: 40px;
+  }
+
+  .assignment-row.assigned .assignment-var { color: var(--text-primary); }
+
+  .assignment-color-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.2);
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+  }
+
+  .assignment-color-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .assignment-row.assigned .assignment-color-name { color: var(--text-muted); }
+
+  .assignment-status {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+
+  /* Connection lines on map */
+  .map-connection {
+    stroke: rgba(0,200,255,0.2);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+    pointer-events: none;
+  }
+
+  /* N-Queens info card */
+  .queens-info-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .qi-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+
+  .qi-val {
+    font-family: 'Orbitron', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .qi-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  .qi-card.highlight .qi-val { color: var(--trying); }
+  .qi-card.success-card .qi-val { color: var(--success); }
+
+  /* ===== SOLVED OVERLAY ===== */
+  .solved-banner {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(4, 16, 30, 0.97);
+    border: 1px solid var(--accent-teal);
+    border-radius: 20px;
+    padding: 32px 48px;
+    text-align: center;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+    box-shadow: 0 0 60px rgba(0,255,204,0.15), 0 0 120px rgba(0,255,204,0.05);
+    animation: bannerIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .solved-banner.show { display: block; }
+
+  @keyframes bannerIn {
+    from { transform: translate(-50%, -50%) scale(0.7); opacity: 0; }
+    to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  }
+
+  .banner-icon { font-size: 48px; margin-bottom: 12px; }
+
+  .banner-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--accent-teal);
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+    text-shadow: 0 0 20px rgba(0,255,204,0.5);
+  }
+
+  .banner-sub {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+  }
+
+  .banner-close {
+    padding: 10px 28px;
+    border-radius: 8px;
+    border: 1px solid var(--accent-teal);
+    background: rgba(0,255,204,0.1);
+    color: var(--accent-teal);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+  }
+
+  .banner-close:hover {
+    background: rgba(0,255,204,0.2);
+    box-shadow: var(--glow-teal);
+  }
+
+  /* ===== PROGRESS BAR ===== */
+  .progress-track {
+    height: 3px;
+    background: rgba(0,200,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-teal));
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    box-shadow: 0 0 8px var(--accent-cyan);
+  }
+
+  /* Color indicators */
+  .color-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 1100px) {
+    .viz-grid { grid-template-columns: 1fr; }
+    .info-bar { grid-template-columns: 1fr 1fr; }
+    .queens-info-bar { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 700px) {
+    .sidebar { width: 220px; }
+    .info-bar { grid-template-columns: 1fr; }
+    .chess-cell { width: 40px; height: 40px; }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.15); border-radius: 3px; }
+
+  /* N-Queens board sizing */
+  #chess-board.size-4 .chess-cell { width: 64px; height: 64px; }
+  #chess-board.size-5 .chess-cell { width: 58px; height: 58px; }
+  #chess-board.size-6 .chess-cell { width: 52px; height: 52px; }
+  #chess-board.size-7 .chess-cell { width: 46px; height: 46px; }
+  #chess-board.size-8 .chess-cell { width: 42px; height: 42px; }
+  #chess-board.size-4 .queen-icon { font-size: 30px; }
+  #chess-board.size-5 .queen-icon { font-size: 28px; }
+
+  .section-full {
+    grid-column: 1 / -1;
+  }
+</style>
+</head>
+<body>
+
+<div class="solved-banner" id="solved-banner">
+  <div class="banner-icon">✦</div>
+  <div class="banner-title">SOLUTION FOUND</div>
+  <div class="banner-sub" id="banner-sub-text">All constraints satisfied.</div>
+  <button class="banner-close" onclick="closeBanner()">Dismiss</button>
+</div>
+
+<div class="app-layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-tag">AI // CSP Engine v2.0</div>
+      <div class="logo-title">
+        CSP VISUALIZER
+        <span>CONSTRAINT SATISFACTION</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-title">Problems</div>
+      <button class="nav-btn active" onclick="switchProblem('map')" id="nav-map">
+        <span class="nav-icon">🌏</span>
+        <span class="nav-label">Map Coloring</span>
+        <span class="nav-badge">AUS</span>
+      </button>
+      <button class="nav-btn" onclick="switchProblem('queens')" id="nav-queens">
+        <span class="nav-icon">♛</span>
+        <span class="nav-label">N-Queens</span>
+        <span class="nav-badge">NxN</span>
+      </button>
+
+      <div class="nav-section-title">Algorithm</div>
+      <button class="nav-btn active" style="pointer-events:none; opacity:0.6;">
+        <span class="nav-icon">↩</span>
+        <span class="nav-label">Backtracking CSP</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-controls">
+      <!-- Stats -->
+      <div class="stat-strip">
+        <div class="stat-row">
+          <span class="stat-name">Steps</span>
+          <span class="stat-val" id="stat-steps">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Backtracks</span>
+          <span class="stat-val" id="stat-bt">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-name">Assigned</span>
+          <span class="stat-val" id="stat-assigned">0</span>
+        </div>
+      </div>
+
+      <!-- Speed -->
+      <div class="ctrl-group">
+        <div class="ctrl-label">
+          Animation Speed
+          <span class="ctrl-value" id="speed-val">Medium</span>
+        </div>
+        <input type="range" id="speed-slider" min="1" max="5" value="3" oninput="updateSpeed(this.value)">
+      </div>
+
+      <!-- Board size (queens only) -->
+      <div class="ctrl-group" id="size-ctrl" style="display:none;">
+        <div class="ctrl-label">
+          Board Size
+          <span class="ctrl-value" id="size-val">8 × 8</span>
+        </div>
+        <input type="range" id="size-slider" min="4" max="8" value="8" oninput="updateBoardSize(this.value)">
+      </div>
+
+      <!-- Buttons -->
+      <div class="btn-group">
+        <button class="btn btn-success" id="btn-start" onclick="startSolving()">▶ Start Solving</button>
+        <button class="btn btn-primary" id="btn-step" onclick="stepSolve()" disabled>Step ▸</button>
+        <button class="btn btn-danger" id="btn-reset" onclick="resetAll()">↺ Reset</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main-content">
+    <div class="topbar">
+      <div class="topbar-title" id="topbar-title">Map Coloring — Australia</div>
+      <div class="topbar-sep"></div>
+      <div class="status-chip" id="status-chip">
+        <div class="status-dot"></div>
+        <span id="status-text">READY</span>
+      </div>
+    </div>
+
+    <!-- MAP COLORING PANEL -->
+    <div class="problem-panel active" id="panel-map">
+      <!-- Info bar -->
+      <div class="info-bar">
+        <div class="info-card">
+          <div class="info-card-title">Variables (Regions)</div>
+          <div class="info-tags" id="var-tags"></div>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">Domain (Colors)</div>
+          <div class="info-tags">
+            <span class="tag tag-domain-r">● Red</span>
+            <span class="tag tag-domain-g">● Green</span>
+            <span class="tag tag-domain-b">● Blue</span>
+          </div>
+        </div>
+        <div class="info-card">
+          <div class="info-card-title">Constraints</div>
+          <div class="constraint-list" id="constraint-list"></div>
+        </div>
+      </div>
+
+      <div class="progress-track"><div class="progress-fill" id="map-progress" style="width:0%"></div></div>
+
+      <!-- Viz grid -->
+      <div class="viz-grid">
+        <!-- Australia Map -->
+        <div class="viz-card">
+          <div class="viz-card-header">
+            <div class="viz-card-title">Australia Map</div>
+          </div>
+          <div class="viz-card-body">
+            <div class="australia-map">
+              <svg id="australia-svg" viewBox="0 0 500 380" xmlns="http://www.w3.org/2000/svg">
+                <!-- Connection lines -->
+                <g id="connections">
+                  <line class="map-connection" x1="120" y1="100" x2="220" y2="100"/>
+                  <line class="map-connection" x1="120" y1="100" x2="215" y2="155"/>
+                  <line class="map-connection" x1="220" y1="100" x2="215" y2="155"/>
+                  <line class="map-connection" x1="220" y1="100" x2="305" y2="105"/>
+                  <line class="map-connection" x1="215" y1="155" x2="305" y2="105"/>
+                  <line class="map-connection" x1="215" y1="155" x2="305" y2="200"/>
+                  <line class="map-connection" x1="215" y1="155" x2="360" y2="225"/>
+                  <line class="map-connection" x1="305" y1="105" x2="360" y2="150"/>
+                  <line class="map-connection" x1="360" y1="150" x2="360" y2="225"/>
+                </g>
+
+                <!-- WA - Western Australia (left large) -->
+                <g class="region" id="region-WA">
+                  <polygon points="30,50 170,50 170,240 110,290 30,290" fill="#1a2a4a"/>
+                  <text class="region-label" x="90" y="160">WA</text>
+                </g>
+
+                <!-- NT - Northern Territory (top center) -->
+                <g class="region" id="region-NT">
+                  <polygon points="180,50 280,50 280,200 250,210 180,190" fill="#1a2a4a"/>
+                  <text class="region-label" x="225" y="120">NT</text>
+                </g>
+
+                <!-- SA - South Australia (center) -->
+                <g class="region" id="region-SA">
+                  <polygon points="180,200 280,210 320,230 310,310 240,310 180,280" fill="#1a2a4a"/>
+                  <text class="region-label" x="245" y="265">SA</text>
+                </g>
+
+                <!-- Q - Queensland (top right) -->
+                <g class="region" id="region-Q">
+                  <polygon points="290,50 420,50 430,180 390,200 310,200 290,200" fill="#1a2a4a"/>
+                  <text class="region-label" x="355" y="115">Q</text>
+                </g>
+
+                <!-- NSW - New South Wales (right center) -->
+                <g class="region" id="region-NSW">
+                  <polygon points="320,205 390,205 430,190 440,310 320,310" fill="#1a2a4a"/>
+                  <text class="region-label" x="378" y="260">NSW</text>
+                </g>
+
+                <!-- V - Victoria (bottom right) -->
+                <g class="region" id="region-V">
+                  <polygon points="320,315 440,315 430,360 290,360 295,330" fill="#1a2a4a"/>
+                  <text class="region-label" x="365" y="345">V</text>
+                </g>
+
+                <!-- T - Tasmania (bottom island) -->
+                <g class="region" id="region-T">
+                  <ellipse cx="370" cy="370" rx="40" ry="18" fill="#1a2a4a"/>
+                  <text class="region-label" x="370" y="374">T</text>
+                </g>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Assignment panel -->
+        <div class="viz-card">
+          <div class="viz-card-header">
+            <div class="viz-card-title">Variable Assignments</div>
+          </div>
+          <div class="viz-card-body" style="align-items:flex-start; padding:16px;">
+            <div class="assignment-grid" id="assignment-grid" style="width:100%"></div>
+          </div>
+        </div>
+
+        <!-- Log panel (full width) -->
+        <div class="viz-card section-full">
+          <div class="log-panel-header">
+            <span style="color:var(--accent-cyan)">⬡</span>
+            Algorithm Trace Log
+          </div>
+          <div id="step-log"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- N-QUEENS PANEL -->
+    <div class="problem-panel" id="panel-queens">
+      <!-- Info cards -->
+      <div class="queens-info-bar">
+        <div class="qi-card">
+          <div class="qi-val" id="q-board-size">8</div>
+          <div class="qi-label">Board Size</div>
+        </div>
+        <div class="qi-card highlight">
+          <div class="qi-val" id="q-steps">0</div>
+          <div class="qi-label">Steps</div>
+        </div>
+        <div class="qi-card">
+          <div class="qi-val" id="q-backtracks">0</div>
+          <div class="qi-label">Backtracks</div>
+        </div>
+        <div class="qi-card success-card">
+          <div class="qi-val" id="q-placed">0</div>
+          <div class="qi-label">Queens Placed</div>
+        </div>
+      </div>
+
+      <div class="progress-track"><div class="progress-fill" id="queens-progress" style="width:0%"></div></div>
+
+      <div class="viz-grid">
+        <!-- Board -->
+        <div class="viz-card">
+          <div class="viz-card-header">
+            <div class="viz-card-title">Chessboard</div>
+          </div>
+          <div class="viz-card-body">
+            <div id="chess-board" class="size-8"></div>
+          </div>
+        </div>
+
+        <!-- Constraint info + log -->
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div class="info-card" style="flex-shrink:0;">
+            <div class="info-card-title">Problem Definition</div>
+            <div style="margin-top:8px;">
+              <div class="constraint-item" style="margin-bottom:6px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted);">Place N queens on N×N board</div>
+              <div class="constraint-item" style="margin-bottom:4px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted);">No two queens: same row</div>
+              <div class="constraint-item" style="margin-bottom:4px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted);">No two queens: same column</div>
+              <div class="constraint-item" style="font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted);">No two queens: same diagonal</div>
+            </div>
+          </div>
+
+          <div class="viz-card" style="flex:1;">
+            <div class="log-panel-header">
+              <span style="color:var(--accent-cyan)">⬡</span>
+              Algorithm Trace
+            </div>
+            <div id="q-step-log" style="height:300px; overflow-y:auto; padding:12px 16px; display:flex; flex-direction:column; gap:4px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// =====================================================
+// STATE
+// =====================================================
+let currentProblem = 'map';
+let isRunning = false;
+let solveQueue = [];
+let solveTimeout = null;
+let solveGenerator = null;
+
+const speedMap = { 1: 1200, 2: 700, 3: 350, 4: 160, 5: 60 };
+const speedLabels = { 1: 'Very Slow', 2: 'Slow', 3: 'Medium', 4: 'Fast', 5: 'Turbo' };
+let animSpeed = 350;
+let boardSize = 8;
+
+// =====================================================
+// MAP COLORING DATA
+// =====================================================
+const MAP_VARS = ['WA', 'NT', 'SA', 'Q', 'NSW', 'V', 'T'];
+const MAP_COLORS = ['red', 'green', 'blue'];
+const MAP_CONSTRAINTS = {
+  WA: ['NT', 'SA'],
+  NT: ['WA', 'SA', 'Q'],
+  SA: ['WA', 'NT', 'Q', 'NSW', 'V'],
+  Q:  ['NT', 'SA', 'NSW'],
+  NSW:['SA', 'Q', 'V'],
+  V:  ['SA', 'NSW'],
+  T:  []
+};
+const COLOR_HEX = { red: '#d64040', green: '#2ea86a', blue: '#3377cc', none: '#1a2a4a' };
+const COLOR_GLOW = { red: '#ff4466', green: '#00e87a', blue: '#3399ff' };
+
+let mapAssignment = {};
+let mapStepCount = 0;
+let mapBacktrackCount = 0;
+
+// =====================================================
+// INIT MAP UI
+// =====================================================
+function initMapUI() {
+  // Variable tags
+  const tagContainer = document.getElementById('var-tags');
+  tagContainer.innerHTML = MAP_VARS.map(v => `<span class="tag tag-var">${v}</span>`).join('');
+
+  // Constraint list
+  const cList = document.getElementById('constraint-list');
+  const pairs = [];
+  ['WA-NT','WA-SA','NT-SA','NT-Q','SA-Q','SA-NSW','SA-V','Q-NSW','NSW-V'].forEach(p => {
+    const [a,b] = p.split('-');
+    pairs.push(`<div class="constraint-item">${a} ≠ ${b}</div>`);
+  });
+  cList.innerHTML = pairs.slice(0,6).join('');
+
+  // Assignment grid
+  const grid = document.getElementById('assignment-grid');
+  grid.innerHTML = MAP_VARS.map(v => `
+    <div class="assignment-row" id="arow-${v}">
+      <span class="assignment-var">${v}</span>
+      <div class="assignment-color-dot" id="adot-${v}" style="background:#1a2a4a;"></div>
+      <span class="assignment-color-name" id="aname-${v}">unassigned</span>
+      <span class="assignment-status" id="astatus-${v}" style="color:var(--text-dim); font-size:9px; letter-spacing:1px;">—</span>
+    </div>
+  `).join('');
+
+  // Reset region colors
+  MAP_VARS.forEach(v => {
+    setRegionColor(v, null);
+    clearRegionState(v);
+  });
+  clearLog('step-log');
+}
+
+function setRegionColor(varName, color) {
+  const el = document.getElementById(`region-${varName}`);
+  if (!el) return;
+  const shapes = el.querySelectorAll('polygon, rect, ellipse, path');
+  shapes.forEach(s => {
+    s.style.fill = color ? COLOR_HEX[color] : '#1a2a4a';
+  });
+}
+
+function setRegionState(varName, state) {
+  const el = document.getElementById(`region-${varName}`);
+  if (!el) return;
+  el.classList.remove('trying', 'conflict', 'assigned');
+  if (state) el.classList.add(state);
+}
+
+function clearRegionState(varName) {
+  const el = document.getElementById(`region-${varName}`);
+  if (!el) return;
+  el.classList.remove('trying', 'conflict', 'assigned');
+}
+
+function updateAssignmentRow(varName, color, status) {
+  const row = document.getElementById(`arow-${varName}`);
+  const dot = document.getElementById(`adot-${varName}`);
+  const name = document.getElementById(`aname-${varName}`);
+  const stat = document.getElementById(`astatus-${varName}`);
+  if (!row) return;
+
+  row.classList.remove('assigned', 'trying');
+
+  if (color && status === 'assigned') {
+    row.classList.add('assigned');
+    dot.style.background = COLOR_HEX[color];
+    dot.style.boxShadow = `0 0 8px ${COLOR_GLOW[color]}`;
+    name.textContent = color;
+    stat.textContent = '✓';
+    stat.style.color = 'var(--success)';
+  } else if (color && status === 'trying') {
+    row.classList.add('trying');
+    dot.style.background = COLOR_HEX[color];
+    dot.style.boxShadow = `0 0 8px ${COLOR_GLOW[color]}`;
+    name.textContent = color + '?';
+    stat.textContent = '?';
+    stat.style.color = 'var(--trying)';
+  } else {
+    dot.style.background = '#1a2a4a';
+    dot.style.boxShadow = 'none';
+    name.textContent = 'unassigned';
+    stat.textContent = '—';
+    stat.style.color = 'var(--text-dim)';
+  }
+}
+
+// =====================================================
+// MAP COLORING BACKTRACKING (GENERATOR)
+// =====================================================
+function* mapColoringCSP() {
+  const assignment = {};
+  mapStepCount = 0;
+  mapBacktrackCount = 0;
+
+  function isConsistent(varName, color, assignment) {
+    for (const neighbor of MAP_CONSTRAINTS[varName]) {
+      if (assignment[neighbor] === color) return false;
+    }
+    return true;
+  }
+
+  function* backtrack(index) {
+    if (index === MAP_VARS.length) {
+      yield { type: 'solved', assignment: {...assignment} };
+      return true;
+    }
+
+    const varName = MAP_VARS[index];
+    yield { type: 'try_var', varName };
+
+    for (const color of MAP_COLORS) {
+      mapStepCount++;
+      yield { type: 'try', varName, color };
+
+      if (isConsistent(varName, color, assignment)) {
+        assignment[varName] = color;
+        yield { type: 'assign', varName, color };
+
+        const result = yield* backtrack(index + 1);
+        if (result === true) return true;
+
+        delete assignment[varName];
+        mapBacktrackCount++;
+        yield { type: 'backtrack', varName, color };
+      } else {
+        yield { type: 'conflict', varName, color };
+      }
+    }
+    return false;
+  }
+
+  yield* backtrack(0);
+}
+
+// =====================================================
+// QUEENS DATA & LOGIC
+// =====================================================
+let queensBoard = [];
+let queensSteps = 0;
+let queensBacktracks = 0;
+
+function initQueensBoard() {
+  queensBoard = Array(boardSize).fill(-1);
+  queensSteps = 0;
+  queensBacktracks = 0;
+
+  const board = document.getElementById('chess-board');
+  board.className = `size-${boardSize}`;
+  board.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
+  board.innerHTML = '';
+
+  for (let r = 0; r < boardSize; r++) {
+    for (let c = 0; c < boardSize; c++) {
+      const cell = document.createElement('div');
+      cell.className = `chess-cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+      cell.id = `cell-${r}-${c}`;
+      board.appendChild(cell);
+    }
+  }
+
+  updateQueensStats();
+  clearLog('q-step-log');
+}
+
+function isSafeQueens(board, row, col) {
+  for (let r = 0; r < row; r++) {
+    const c = board[r];
+    if (c === col) return false;
+    if (Math.abs(c - col) === Math.abs(r - row)) return false;
+  }
+  return true;
+}
+
+function* nQueensCSP() {
+  const board = Array(boardSize).fill(-1);
+  queensSteps = 0;
+  queensBacktracks = 0;
+
+  function getThreatenedCells(b, upToRow) {
+    const threatened = new Set();
+    for (let r = 0; r < upToRow; r++) {
+      const qc = b[r];
+      if (qc < 0) continue;
+      for (let c = 0; c < boardSize; c++) {
+        if (c === qc) threatened.add(`${r+1}-${c}`);
+        if (Math.abs(c - qc) === Math.abs((r+1) - r)) threatened.add(`${r+1}-${c}`);
+      }
+    }
+    return threatened;
+  }
+
+  function* backtrack(row) {
+    if (row === boardSize) {
+      yield { type: 'solved', board: [...board] };
+      return true;
+    }
+
+    for (let col = 0; col < boardSize; col++) {
+      queensSteps++;
+      yield { type: 'try', row, col, board: [...board] };
+
+      if (isSafeQueens(board, row, col)) {
+        board[row] = col;
+        yield { type: 'place', row, col, board: [...board] };
+
+        const result = yield* backtrack(row + 1);
+        if (result === true) return true;
+
+        board[row] = -1;
+        queensBacktracks++;
+        yield { type: 'remove', row, col, board: [...board] };
+      } else {
+        yield { type: 'conflict', row, col };
+      }
+    }
+    return false;
+  }
+
+  yield* backtrack(0);
+}
+
+// =====================================================
+// QUEENS BOARD RENDERING
+// =====================================================
+function renderQueensBoard(board, tryRow, tryCol, conflictRow, conflictCol) {
+  for (let r = 0; r < boardSize; r++) {
+    for (let c = 0; c < boardSize; c++) {
+      const cell = document.getElementById(`cell-${r}-${c}`);
+      if (!cell) continue;
+      cell.innerHTML = '';
+      cell.classList.remove('trying', 'placed', 'conflict', 'threatened');
+      cell.className = `chess-cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
+    }
+  }
+
+  // Draw placed queens
+  for (let r = 0; r < boardSize; r++) {
+    if (board[r] >= 0) {
+      const c = board[r];
+      const cell = document.getElementById(`cell-${r}-${c}`);
+      if (cell) {
+        cell.classList.add('placed');
+        cell.innerHTML = `<span class="queen-icon placed">♛</span>`;
+      }
+    }
+  }
+
+  // Draw trying cell
+  if (tryRow !== undefined && tryCol !== undefined) {
+    const cell = document.getElementById(`cell-${tryRow}-${tryCol}`);
+    if (cell) {
+      cell.classList.remove('placed');
+      cell.classList.add('trying');
+      cell.innerHTML = `<span class="queen-icon trying">♛</span>`;
+    }
+  }
+
+  // Draw conflict
+  if (conflictRow !== undefined && conflictCol !== undefined) {
+    const cell = document.getElementById(`cell-${conflictRow}-${conflictCol}`);
+    if (cell) {
+      cell.classList.remove('trying');
+      cell.classList.add('conflict');
+      cell.innerHTML = `<span class="queen-icon conflict">✕</span>`;
+    }
+  }
+}
+
+// =====================================================
+// SOLVER ENGINE
+// =====================================================
+function startSolving() {
+  if (isRunning) return;
+  isRunning = true;
+
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-reset').disabled = false;
+
+  setStatus('running', 'SOLVING...');
+
+  if (currentProblem === 'map') {
+    solveGenerator = mapColoringCSP();
+    runMapStep();
+  } else {
+    solveGenerator = nQueensCSP();
+    runQueensStep();
+  }
+}
+
+function runMapStep() {
+  if (!isRunning) return;
+  const result = solveGenerator.next();
+  if (result.done) { isRunning = false; return; }
+
+  const step = result.value;
+  handleMapStep(step);
+
+  if (step.type !== 'solved') {
+    solveTimeout = setTimeout(runMapStep, animSpeed);
+  } else {
+    isRunning = false;
+  }
+}
+
+function runQueensStep() {
+  if (!isRunning) return;
+  const result = solveGenerator.next();
+  if (result.done) { isRunning = false; return; }
+
+  const step = result.value;
+  handleQueensStep(step);
+
+  if (step.type !== 'solved') {
+    solveTimeout = setTimeout(runQueensStep, animSpeed);
+  } else {
+    isRunning = false;
+  }
+}
+
+// =====================================================
+// MAP STEP HANDLER
+// =====================================================
+function handleMapStep(step) {
+  updateStats(mapStepCount, mapBacktrackCount, Object.keys(mapAssignment).length);
+  const prog = (Object.keys(mapAssignment).length / MAP_VARS.length) * 100;
+  document.getElementById('map-progress').style.width = prog + '%';
+
+  if (step.type === 'try_var') {
+    // highlight variable
+  } else if (step.type === 'try') {
+    MAP_VARS.forEach(v => clearRegionState(v));
+    Object.entries(mapAssignment).forEach(([v, c]) => {
+      setRegionState(v, 'assigned');
+    });
+    setRegionState(step.varName, 'trying');
+    setRegionColor(step.varName, step.color);
+    updateAssignmentRow(step.varName, step.color, 'trying');
+    addLog('step-log', `Trying ${step.varName} = ${step.color}`, 'try');
+
+  } else if (step.type === 'assign') {
+    mapAssignment[step.varName] = step.color;
+    setRegionState(step.varName, 'assigned');
+    setRegionColor(step.varName, step.color);
+    updateAssignmentRow(step.varName, step.color, 'assigned');
+    addLog('step-log', `✓ Assigned ${step.varName} = ${step.color}`, 'assign');
+
+  } else if (step.type === 'conflict') {
+    setRegionState(step.varName, 'conflict');
+    updateAssignmentRow(step.varName, step.color, 'trying');
+    addLog('step-log', `✗ Conflict: ${step.varName} = ${step.color} fails`, 'backtrack');
+    setTimeout(() => {
+      setRegionColor(step.varName, mapAssignment[step.varName] || null);
+      if (mapAssignment[step.varName]) setRegionState(step.varName, 'assigned');
+      else clearRegionState(step.varName);
+    }, animSpeed * 0.7);
+
+  } else if (step.type === 'backtrack') {
+    delete mapAssignment[step.varName];
+    setRegionColor(step.varName, null);
+    clearRegionState(step.varName);
+    updateAssignmentRow(step.varName, null, null);
+    addLog('step-log', `↩ Backtrack: removing ${step.varName} = ${step.color}`, 'backtrack');
+
+  } else if (step.type === 'solved') {
+    // Final render
+    Object.entries(step.assignment).forEach(([v, c]) => {
+      setRegionColor(v, c);
+      setRegionState(v, 'assigned');
+      updateAssignmentRow(v, c, 'assigned');
+    });
+    document.getElementById('map-progress').style.width = '100%';
+    updateStats(mapStepCount, mapBacktrackCount, MAP_VARS.length);
+    setStatus('solved', 'SOLVED');
+    addLog('step-log', '★ Solution found! All constraints satisfied.', 'solved');
+    showBanner(`Map colored in ${mapStepCount} steps with ${mapBacktrackCount} backtracks`);
+  }
+}
+
+// =====================================================
+// QUEENS STEP HANDLER
+// =====================================================
+function handleQueensStep(step) {
+  document.getElementById('q-steps').textContent = queensSteps;
+  document.getElementById('q-backtracks').textContent = queensBacktracks;
+  updateStats(queensSteps, queensBacktracks, step.board ? step.board.filter(x => x >= 0).length : 0);
+
+  if (step.type === 'try') {
+    const placed = [...step.board];
+    placed[step.row] = -1;
+    renderQueensBoard(placed, step.row, step.col);
+    const placed_count = placed.filter(x => x >= 0).length;
+    document.getElementById('q-placed').textContent = placed_count;
+    document.getElementById('queens-progress').style.width = (placed_count / boardSize * 100) + '%';
+    addLog('q-step-log', `Trying row ${step.row+1}, col ${step.col+1}`, 'try');
+
+  } else if (step.type === 'place') {
+    renderQueensBoard(step.board);
+    const placed_count = step.board.filter(x => x >= 0).length;
+    document.getElementById('q-placed').textContent = placed_count;
+    document.getElementById('queens-progress').style.width = (placed_count / boardSize * 100) + '%';
+    addLog('q-step-log', `♛ Placed queen at row ${step.row+1}, col ${step.col+1}`, 'assign');
+
+  } else if (step.type === 'conflict') {
+    renderQueensBoard(queensBoard, undefined, undefined, step.row, step.col);
+    addLog('q-step-log', `✗ Conflict at row ${step.row+1}, col ${step.col+1}`, 'backtrack');
+
+  } else if (step.type === 'remove') {
+    queensBoard = [...step.board];
+    renderQueensBoard(step.board);
+    const placed_count = step.board.filter(x => x >= 0).length;
+    document.getElementById('q-placed').textContent = placed_count;
+    document.getElementById('queens-progress').style.width = (placed_count / boardSize * 100) + '%';
+    addLog('q-step-log', `↩ Removed queen from row ${step.row+1}, col ${step.col+1}`, 'backtrack');
+
+  } else if (step.type === 'solved') {
+    renderQueensBoard(step.board);
+    document.getElementById('q-placed').textContent = boardSize;
+    document.getElementById('queens-progress').style.width = '100%';
+    setStatus('solved', 'SOLVED');
+    updateStats(queensSteps, queensBacktracks, boardSize);
+    addLog('q-step-log', `★ All ${boardSize} queens placed! Solution found.`, 'solved');
+    showBanner(`${boardSize}-Queens solved in ${queensSteps} steps with ${queensBacktracks} backtracks`);
+  }
+}
+
+// =====================================================
+// STEP SOLVE (manual step button)
+// =====================================================
+function stepSolve() {
+  if (!solveGenerator) {
+    solveGenerator = currentProblem === 'map' ? mapColoringCSP() : nQueensCSP();
+    mapAssignment = {};
+    document.getElementById('btn-step').disabled = false;
+  }
+  const result = solveGenerator.next();
+  if (result.done) return;
+  if (currentProblem === 'map') handleMapStep(result.value);
+  else handleQueensStep(result.value);
+}
+
+// =====================================================
+// UTILITIES
+// =====================================================
+function addLog(logId, message, type) {
+  const log = document.getElementById(logId);
+  if (!log) return;
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  entry.textContent = message;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+  // Keep only last 80 entries
+  while (log.children.length > 80) log.removeChild(log.firstChild);
+}
+
+function clearLog(logId) {
+  const log = document.getElementById(logId);
+  if (log) log.innerHTML = '';
+}
+
+function setStatus(type, text) {
+  const chip = document.getElementById('status-chip');
+  const txt = document.getElementById('status-text');
+  chip.className = `status-chip ${type}`;
+  txt.textContent = text;
+}
+
+function updateStats(steps, bt, assigned) {
+  document.getElementById('stat-steps').textContent = steps;
+  document.getElementById('stat-bt').textContent = bt;
+  document.getElementById('stat-assigned').textContent = assigned;
+}
+
+function showBanner(subtitle) {
+  const banner = document.getElementById('solved-banner');
+  document.getElementById('banner-sub-text').textContent = subtitle;
+  banner.classList.add('show');
+}
+
+function closeBanner() {
+  document.getElementById('solved-banner').classList.remove('show');
+}
+
+function resetAll() {
+  isRunning = false;
+  if (solveTimeout) clearTimeout(solveTimeout);
+  solveGenerator = null;
+  solveTimeout = null;
+  mapAssignment = {};
+
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-step').disabled = false;
+  setStatus('', 'READY');
+  updateStats(0, 0, 0);
+  closeBanner();
+
+  if (currentProblem === 'map') {
+    initMapUI();
+    document.getElementById('map-progress').style.width = '0%';
+  } else {
+    initQueensBoard();
+    document.getElementById('queens-progress').style.width = '0%';
+    document.getElementById('q-steps').textContent = '0';
+    document.getElementById('q-backtracks').textContent = '0';
+    document.getElementById('q-placed').textContent = '0';
+  }
+}
+
+function updateSpeed(val) {
+  animSpeed = speedMap[val];
+  document.getElementById('speed-val').textContent = speedLabels[val];
+}
+
+function updateBoardSize(val) {
+  boardSize = parseInt(val);
+  document.getElementById('size-val').textContent = `${boardSize} × ${boardSize}`;
+  document.getElementById('q-board-size').textContent = boardSize;
+  if (!isRunning) initQueensBoard();
+}
+
+function switchProblem(problem) {
+  // Stop running
+  isRunning = false;
+  if (solveTimeout) clearTimeout(solveTimeout);
+  solveGenerator = null;
+
+  currentProblem = problem;
+  closeBanner();
+
+  document.getElementById('panel-map').classList.toggle('active', problem === 'map');
+  document.getElementById('panel-queens').classList.toggle('active', problem === 'queens');
+  document.getElementById('nav-map').classList.toggle('active', problem === 'map');
+  document.getElementById('nav-queens').classList.toggle('active', problem === 'queens');
+  document.getElementById('size-ctrl').style.display = problem === 'queens' ? 'block' : 'none';
+
+  if (problem === 'map') {
+    document.getElementById('topbar-title').textContent = 'Map Coloring — Australia';
+    initMapUI();
+  } else {
+    document.getElementById('topbar-title').textContent = 'N-Queens Problem';
+    initQueensBoard();
+  }
+
+  setStatus('', 'READY');
+  updateStats(0, 0, 0);
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-step').disabled = false;
+}
+
+// =====================================================
+// BOOT
+// =====================================================
+initMapUI();
+addLog('step-log', 'System ready. Press "Start Solving" to begin.', 'info');
+addLog('step-log', 'Algorithm: Backtracking CSP with constraint propagation.', 'info');
+</script>
+</body>
+</html>
